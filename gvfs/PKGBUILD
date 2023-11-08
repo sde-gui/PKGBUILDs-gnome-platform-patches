@@ -7,7 +7,7 @@ pkgname=(
   gvfs-{smb,afc,gphoto2,goa,mtp,nfs,google}
 )
 pkgver=1.52.1
-pkgrel=1
+pkgrel=2
 pkgdesc="Virtual filesystem implementation for GIO"
 url="https://wiki.gnome.org/Projects/gvfs"
 arch=(x86_64)
@@ -53,7 +53,7 @@ source=(
 )
 b2sums=('SKIP'
         '08a830600964d2c896d7f107d9558053a32eb6b9166433d6e29b58d4c38e318cbb7fdf7b8230cf72d433df65f4698b9ad86624bf7d3c30c883db325d51335189'
-        '10f09864dc5f164816512f79176383a92801cd43520fab4e65e4143e5b4290d6b3944538a3fa3b88fff5252b104cc8f7cb2645149dbf8d4d886adcbb7e74a64c')
+        'd3d11825f0567e0c90c7192136e74260bf88e7acdf7dcb4e634eac9efaf3b2518c5de90e1a1b79d732ae67e12a1e73e2009bfab5dbd830fff9b00e43f10308f6')
 
 pkgver() {
   cd gvfs

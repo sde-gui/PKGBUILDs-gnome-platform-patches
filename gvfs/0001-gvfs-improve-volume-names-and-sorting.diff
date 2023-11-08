@@ -118,7 +118,7 @@ diff -u -r gvfs.orig/monitor/udisks2/gvfsudisks2volume.c gvfs/monitor/udisks2/gv
 +  else
 +    label = g_strdup ("zzzzz");
 +
-+  volume->sort_key = g_strdup_printf ("gvfs.sort_key.%s.%s%" G_GINT64_FORMAT,
++  volume->sort_key = g_strdup_printf ("gvfs.sort_key.%s.%s.%" G_GINT64_FORMAT,
 +    dev_name, label, volume->time_detected_usec);
 +}
 +
