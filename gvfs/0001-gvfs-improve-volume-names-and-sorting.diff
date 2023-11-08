@@ -1,0 +1,217 @@
+This patch improves logic for volume names and sor keys reported by gvfs-udisks2-volume-monitor
+
+* Avoid uninformative "XXX GB Volume" names whenever possible.
+* Construct displayed name from device path, fs label, and volume size.
+* Prefer sorting by device name.
+
+diff -u -r gvfs.orig/monitor/udisks2/gvfsudisks2volume.c gvfs/monitor/udisks2/gvfsudisks2volume.c
+--- gvfs.orig/monitor/udisks2/gvfsudisks2volume.c	2023-11-08 14:26:12.910581627 +0700
++++ gvfs/monitor/udisks2/gvfsudisks2volume.c	2023-11-08 16:21:18.322687193 +0700
+@@ -65,6 +65,9 @@
+   UDisksBlock *block;
+   GUnixMountPoint *mount_point;
+ 
++  /* set in gvfs_udisks2_volume_new() */
++  gint64 time_detected_usec;
++
+   /* set in update_volume() */
+   GIcon *icon;
+   GIcon *symbolic_icon;
+@@ -223,6 +226,107 @@
+ }
+ #endif
+ 
++static void
++update_volume_name_orig (UDisksClient *udisks_client, UDisksBlock *block, GVfsUDisks2Volume *volume)
++{
++  if (strlen (udisks_block_get_id_label (block)) > 0)
++    {
++      volume->name = g_strdup (udisks_block_get_id_label (block));
++    }
++  else if (g_strcmp0 (udisks_block_get_id_usage (block), "crypto") == 0)
++    {
++      gchar *s = udisks_client_get_size_for_display (udisks_client, udisks_block_get_size (volume->block), FALSE, FALSE);
++      if (g_strcmp0 (udisks_block_get_id_type (block), "crypto_unknown") == 0)
++        {
++          /* Translators: This is used for possibly encrypted volumes.
++           *              The first %s is the formatted size (e.g. "42.0 MB").
++           */
++          volume->name = g_strdup_printf (_("%s Possibly Encrypted"), s);
++        }
++      else
++        {
++          /* Translators: This is used for encrypted volumes.
++           *              The first %s is the formatted size (e.g. "42.0 MB").
++           */
++          volume->name = g_strdup_printf (_("%s Encrypted"), s);
++        }
++      g_free (s);
++    }
++  else
++    {
++      guint64 size = udisks_block_get_size (block);
++      if (size > 0)
++        {
++          gchar *s = udisks_client_get_size_for_display (udisks_client, size, FALSE, FALSE);
++          /* Translators: This is used for volume with no filesystem label.
++           *              The first %s is the formatted size (e.g. "42.0 MB").
++           */
++          volume->name = g_strdup_printf (_("%s Volume"), s);
++          g_free (s);
++        }
++    }
++}
++
++static void
++update_volume_name (UDisksClient *udisks_client, UDisksBlock *block, GVfsUDisks2Volume *volume)
++{
++  gchar *dev_name = NULL;
++  gchar *label = NULL;
++
++  if (strlen (udisks_block_get_preferred_device (block)) > 0)
++    dev_name = g_strdup (udisks_block_get_preferred_device (block));
++  else if (strlen (udisks_block_get_device (block)) > 0)
++    dev_name = g_strdup (udisks_block_get_device (block));
++
++  if (strlen (udisks_block_get_id_label (block)) > 0)
++    label = g_strdup (udisks_block_get_id_label (block));
++
++  if (dev_name || label)
++    {
++      const char *n = dev_name;
++      if (g_str_has_prefix (dev_name, "/dev/"))
++        {
++           n = dev_name + strlen("/dev/");
++        }
++      gchar *s = udisks_client_get_size_for_display (udisks_client, udisks_block_get_size (volume->block), FALSE, FALSE);
++      if (n && label)
++        volume->name = g_strdup_printf (_("%s, %s (%s)"), n, label, s);
++      else if (n)
++        volume->name = g_strdup_printf (_("%s (%s)"), n, s);
++      else if (label)
++        volume->name = g_strdup_printf (_("%s (%s)"), label, s);
++      g_free(s);
++      g_free(dev_name);
++      g_free(label);
++    }
++  else
++    {
++      update_volume_name_orig (udisks_client, block, volume);
++    }
++}
++
++static void
++update_volume_sort_key (UDisksBlock *block, GVfsUDisks2Volume *volume)
++{
++  gchar *dev_name = NULL;
++  gchar *label = NULL;
++
++  if (strlen (udisks_block_get_preferred_device (block)) > 0)
++    dev_name = g_strdup (udisks_block_get_preferred_device (block));
++  else if (strlen (udisks_block_get_device (block)) > 0)
++    dev_name = g_strdup (udisks_block_get_device (block));
++  else
++    dev_name = g_strdup ("zzzzz");
++
++  if (strlen (udisks_block_get_id_label (block)) > 0)
++    label = g_strdup (udisks_block_get_id_label (block));
++  else
++    label = g_strdup ("zzzzz");
++
++  volume->sort_key = g_strdup_printf ("gvfs.sort_key.%s.%s%" G_GINT64_FORMAT,
++    dev_name, label, volume->time_detected_usec);
++}
++
+ static gboolean
+ update_volume (GVfsUDisks2Volume *volume)
+ {
+@@ -233,10 +337,10 @@
+   gchar *old_name;
+   gchar *old_device_file;
+   gchar *old_uuid;
++  gchar *old_sort_key;
+   dev_t old_dev;
+   GIcon *old_icon;
+   UDisksDrive *udisks_drive;
+-  gchar *s;
+ 
+   udisks_client = gvfs_udisks2_volume_monitor_get_udisks_client (volume->monitor);
+ 
+@@ -248,6 +352,7 @@
+   old_name = g_strdup (volume->name);
+   old_device_file = g_strdup (volume->device_file);
+   old_uuid = g_strdup (volume->uuid);
++  old_sort_key = g_strdup (volume->sort_key);
+   old_dev = volume->dev;
+   old_icon = volume->icon != NULL ? g_object_ref (volume->icon) : NULL;
+ 
+@@ -288,43 +393,8 @@
+       volume->dev = udisks_block_get_device_number (block);
+       volume->device_file = udisks_block_dup_device (block);
+       volume->uuid = udisks_block_dup_id_uuid (block);
+-
+-      if (strlen (udisks_block_get_id_label (block)) > 0)
+-        {
+-          volume->name = g_strdup (udisks_block_get_id_label (block));
+-        }
+-      else if (g_strcmp0 (udisks_block_get_id_usage (block), "crypto") == 0)
+-        {
+-          s = udisks_client_get_size_for_display (udisks_client, udisks_block_get_size (volume->block), FALSE, FALSE);
+-          if (g_strcmp0 (udisks_block_get_id_type (block), "crypto_unknown") == 0)
+-            {
+-              /* Translators: This is used for possibly encrypted volumes.
+-               *              The first %s is the formatted size (e.g. "42.0 MB").
+-               */
+-              volume->name = g_strdup_printf (_("%s Possibly Encrypted"), s);
+-            }
+-          else
+-            {
+-              /* Translators: This is used for encrypted volumes.
+-               *              The first %s is the formatted size (e.g. "42.0 MB").
+-               */
+-              volume->name = g_strdup_printf (_("%s Encrypted"), s);
+-            }
+-          g_free (s);
+-        }
+-      else
+-        {
+-          guint64 size = udisks_block_get_size (block);
+-          if (size > 0)
+-            {
+-              s = udisks_client_get_size_for_display (udisks_client, size, FALSE, FALSE);
+-              /* Translators: This is used for volume with no filesystem label.
+-               *              The first %s is the formatted size (e.g. "42.0 MB").
+-               */
+-              volume->name = g_strdup_printf (_("%s Volume"), s);
+-              g_free (s);
+-            }
+-        }
++      update_volume_name (udisks_client, block, volume);
++      update_volume_sort_key (block, volume);
+ 
+       udisks_drive = udisks_client_get_drive_for_block (udisks_client, volume->block);
+       if (udisks_drive != NULL)
+@@ -575,6 +645,7 @@
+               (g_strcmp0 (old_name, volume->name) == 0) &&
+               (g_strcmp0 (old_device_file, volume->device_file) == 0) &&
+               (g_strcmp0 (old_uuid, volume->uuid) == 0) &&
++              (g_strcmp0 (old_sort_key, volume->sort_key) == 0) &&
+               (old_dev == volume->dev) &&
+               g_icon_equal (old_icon, volume->icon)
+               );
+@@ -585,6 +656,7 @@
+   g_free (old_name);
+   g_free (old_device_file);
+   g_free (old_uuid);
++  g_free (old_sort_key);
+   if (old_icon != NULL)
+     g_object_unref (old_icon);
+ 
+@@ -658,6 +730,7 @@
+   volume->monitor = monitor;
+   volume->coldplug = coldplug;
+ 
++  volume->time_detected_usec = g_get_real_time ();
+   volume->sort_key = g_strdup_printf ("gvfs.time_detected_usec.%" G_GINT64_FORMAT, g_get_real_time ());
+ 
+   if (block != NULL)

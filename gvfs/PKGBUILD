@@ -3,7 +3,7 @@
 
 pkgbase=gvfs
 pkgname=(
-  gvfs
+  gvfs-with-sde-patches
   gvfs-{smb,afc,gphoto2,goa,mtp,nfs,google}
 )
 pkgver=1.52.1
@@ -49,9 +49,11 @@ _commit=56b44a2d8219169996c80d519aa34af6027a3063  # tags/1.52.1^0
 source=(
   "git+https://gitlab.gnome.org/GNOME/gvfs.git#commit=$_commit"
   gvfsd.hook
+  0001-gvfs-improve-volume-names-and-sorting.diff
 )
 b2sums=('SKIP'
-        '08a830600964d2c896d7f107d9558053a32eb6b9166433d6e29b58d4c38e318cbb7fdf7b8230cf72d433df65f4698b9ad86624bf7d3c30c883db325d51335189')
+        '08a830600964d2c896d7f107d9558053a32eb6b9166433d6e29b58d4c38e318cbb7fdf7b8230cf72d433df65f4698b9ad86624bf7d3c30c883db325d51335189'
+        '10f09864dc5f164816512f79176383a92801cd43520fab4e65e4143e5b4290d6b3944538a3fa3b88fff5252b104cc8f7cb2645149dbf8d4d886adcbb7e74a64c')
 
 pkgver() {
   cd gvfs
@@ -60,6 +62,7 @@ pkgver() {
 
 prepare() {
   cd gvfs
+  patch -Np1 -b -z .orig < ../0001-gvfs-improve-volume-names-and-sorting.diff
 }
 
 build() {
@@ -81,7 +84,9 @@ _pick() {
   done
 }
 
-package_gvfs() {
+package_gvfs-with-sde-patches() {
+  conflicts=(gvfs)
+  provides=(gvfs=$pkgver)
   replaces=(gvfs-{obexftp,afp})
   optdepends=(
     'gtk3: Recent files support'
