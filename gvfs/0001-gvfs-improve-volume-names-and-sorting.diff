@@ -1,8 +1,8 @@
-This patch improves logic for volume names and sor keys reported by gvfs-udisks2-volume-monitor
+This patch improves logic for volume names and sort keys reported by gvfs-udisks2-volume-monitor
 
 * Avoid uninformative "XXX GB Volume" names whenever possible.
 * Construct displayed name from device path, fs label, and volume size.
-* Prefer sorting by device name.
+* Prefer sorting by device path.
 
 diff -u -r gvfs.orig/monitor/udisks2/gvfsudisks2volume.c gvfs/monitor/udisks2/gvfsudisks2volume.c
 --- gvfs.orig/monitor/udisks2/gvfsudisks2volume.c	2023-11-08 14:26:12.910581627 +0700
